@@ -1,0 +1,29 @@
+{
+  "business": {
+    "name": "Iconic",
+    "fullName": "Iconic Car Washing Centre",
+    "owner": "Sanju bhaiya",
+    "phone": "+917970000601",
+    "displayPhone": "+91 79700 00601",
+    "whatsapp": "917970000601",
+    "timezone": "Asia/Kolkata"
+  },
+  "services": [
+    { "id": "car-wash", "name": "Car wash", "hindi": "कार वॉश", "description": "A proper exterior wash. A fresh start for your drive.", "price": 150, "demoMinutes": 45, "icon": "car", "includes": ["Exterior car wash"], "tag": "EVERYDAY ESSENTIAL" },
+    { "id": "vacuum", "name": "Vacuum cleaning", "hindi": "वैक्यूम", "description": "Less dust, fewer crumbs. More room to breathe.", "price": 50, "demoMinutes": 15, "icon": "wind", "includes": ["Vacuum cleaning"], "tag": "FRESHEN UP" },
+    { "id": "dashboard-tyre", "name": "Dashboard + tyre polish", "hindi": "डैशबोर्ड + टायर पॉलिस", "description": "The finishing touches that make the details shine.", "price": 100, "demoMinutes": 30, "icon": "dashboard", "includes": ["Dashboard polish", "Tyre polish"], "tag": "DETAIL MATTERS" },
+    { "id": "body-polish", "name": "Body polish", "hindi": "बॉडी पॉलिस", "description": "Give your car’s exterior its well-deserved glow.", "price": 50, "demoMinutes": 30, "icon": "sparkles", "includes": ["Body polish"], "tag": "A LITTLE SHINE" },
+    { "id": "complete", "name": "Complete care", "hindi": "टोटल पैकेज", "description": "Wash, vacuum, dashboard + tyre polish, and body polish.", "price": 350, "demoMinutes": 105, "icon": "layers", "includes": ["Car wash", "Vacuum cleaning", "Dashboard + tyre polish", "Body polish"], "tag": "ALL 4 SERVICES" },
+    { "id": "vip", "name": "VIP wash + polish", "hindi": "वीआईपी धुलाई और पॉलिस", "description": "The premium wash-and-polish treatment, straight from our menu.", "price": 600, "demoMinutes": 150, "icon": "crown", "includes": ["VIP washing", "Polish"], "tag": "THE VIP TREATMENT" }
+  ],
+  "askAtCentre": ["Interior wash", "Engine cleaning", "Foam wash", "Bike wash"],
+  "demoSettings": {
+    "opening": "09:00",
+    "closing": "19:00",
+    "slotMinutes": 30,
+    "capacity": 1,
+    "leadMinutes": 15,
+    "weeklyOff": [],
+    "durations": { "car-wash": 45, "vacuum": 15, "dashboard-tyre": 30, "body-polish": 30, "complete": 105, "vip": 150 }
+  }
+}
