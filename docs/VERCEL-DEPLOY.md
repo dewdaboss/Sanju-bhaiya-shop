@@ -65,7 +65,18 @@ Production ke liye ye values zaroor set karein. Preview deployments ke liye alag
 - Test booking cancel/delete karo taaki real slot free rahe.
 - Mobile par layout check karo.
 
-## 7. Baad mein
+## 7. Agar root URL par `404 NOT_FOUND` aaye
+
+Sabse common reason: Vercel galat branch deploy kar raha hai. Is repo ka application code `arena/413c01fa-sanju-bhaiya-shop` branch par hai; agar `main` par sirf README hai aur Vercel production branch `main` hai, root par koi `index.html`/build output nahi milega.
+
+Fix:
+1. Vercel → Project → **Settings → Git → Production Branch** ko `arena/413c01fa-sanju-bhaiya-shop` karein, ya is branch ka PR `main` mein merge karein.
+2. **Deployments** mein latest deployment ka branch/commit check karein. Code wala commit `aad87d8` ya uske baad ka hona chahiye.
+3. Redeploy karein. Build successful hona chahiye aur output `dist` hona chahiye.
+4. Project Settings mein Root Directory `./`/repo root, Framework Vite, Build Command `npm run build`, Output Directory `dist`, Node `22.x` confirm karein.
+5. Agar deployment successful hai phir bhi 404 hai, Vercel deployment ke **Build Logs** aur **Functions** tab ka screenshot bhejein (secrets hide karke).
+
+## 8. Baad mein
 
 - Custom domain connect karna ho to Vercel Domains mein add karo.
 - Google Business Profile mein hosted website URL aur `/#book` booking link add karo.
