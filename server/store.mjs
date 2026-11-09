@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { SERVICES, DEMO_SETTINGS, HttpError, HOLD_MINUTES, minutes, timeString, instant, shopDate, dateOffset, validDate } from './domain.mjs';
+import { SERVICES, DEMO_SETTINGS, HttpError, HOLD_MINUTES, minutes, timeString, instant, shopDate, validDate, buildAvailability } from './domain.mjs';
 
 const TABLES = { real: 'bookings', demo: 'demo_bookings' };
 function tableName(mode) {
@@ -28,7 +28,9 @@ export class BookingStore {
     this.db = new DatabaseSync(directory === ':memory:' ? directory : resolve(directory, 'shop.sqlite'));
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;
       CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, expires_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at TEXT NOT NULL);`);
     for (const table of Object.values(TABLES)) {
       this.db.exec(`CREATE TABLE IF NOT EXISTS ${table} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,25 +64,9 @@ export class BookingStore {
   availability(settings, date, serviceId, mode = 'real', now = new Date()) {
     const service = SERVICES.find((s) => s.id === serviceId);
     if (!service) throw new HttpError(400, 'Choose a service from the menu.');
-    if (!validDate(date) || date < shopDate(now) || date > dateOffset(shopDate(now), 60)) throw new HttpError(400, 'Choose a date within the next 60 days.');
     this.expirePending(mode, now);
-    const duration = settings.durations[serviceId];
-    const day = new Date(`${date}T00:00:00Z`).getUTCDay();
-    const base = { date, serviceId, minutes: duration, opening: settings.opening, closing: settings.closing, capacity: settings.capacity, slots: [], closedReason: '' };
-    if (settings.weeklyOff.includes(day)) return { ...base, closedReason: 'The centre is closed on this day. Please choose another date.' };
     const rows = this.db.prepare(`SELECT start_at,end_at FROM ${tableName(mode)} WHERE date=? AND status!='cancelled'`).all(date);
-    const earliest = now.getTime() + settings.leadMinutes * 60_000;
-    for (let start = minutes(settings.opening); start + duration <= minutes(settings.closing); start += settings.slotMinutes) {
-      const end = start + duration;
-      const startAt = instant(date, timeString(start)).getTime();
-      const endAt = instant(date, timeString(end)).getTime();
-      const used = rows.filter((r) => Date.parse(r.start_at) < endAt && Date.parse(r.end_at) > startAt).length;
-      const remaining = Math.max(0, settings.capacity - used);
-      const past = startAt < earliest;
-      base.slots.push({ time: timeString(start), endTime: timeString(end), remaining, available: !past && remaining > 0, reason: past ? 'past' : remaining === 0 ? 'full' : '' });
-    }
-    if (!base.slots.length) base.closedReason = 'This service is longer than the working day. Please ask the centre about a suitable time.';
-    return base;
+    return buildAvailability(settings, date, serviceId, rows, now);
   }
 
   createBooking(input, settings, mode = 'real', now = new Date()) {
@@ -158,6 +144,33 @@ export class BookingStore {
           'Fictional example — not a real customer', today, example.time, endTime, instant(today, example.time).toISOString(), instant(today, endTime).toISOString(), duration, service.price, example.status, now.toISOString(), now.toISOString());
     }
     this.db.prepare('INSERT INTO metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run('demo_seed_date', today);
+  }
+
+  putSession(tokenHash, expiryIso) {
+    this.db.prepare('INSERT INTO admin_sessions(token_hash,expires_at) VALUES(?,?) ON CONFLICT(token_hash) DO UPDATE SET expires_at=excluded.expires_at').run(tokenHash, expiryIso);
+  }
+
+  findSession(tokenHash) {
+    return this.db.prepare('SELECT expires_at FROM admin_sessions WHERE token_hash=?').get(tokenHash) || null;
+  }
+
+  removeSession(tokenHash) {
+    this.db.prepare('DELETE FROM admin_sessions WHERE token_hash=?').run(tokenHash);
+  }
+
+  pruneSessions(now = new Date()) {
+    this.db.prepare('DELETE FROM admin_sessions WHERE expires_at <= ?').run(now.toISOString());
+  }
+
+  consumeRate(key, max, windowMs, now = new Date()) {
+    const nowIso = now.toISOString();
+    const reset = new Date(now.getTime() + windowMs).toISOString();
+    const row = this.db.prepare(`INSERT INTO rate_limits(key,count,reset_at) VALUES(?,1,?)
+      ON CONFLICT(key) DO UPDATE SET
+        count = CASE WHEN rate_limits.reset_at <= ? THEN 1 ELSE rate_limits.count + 1 END,
+        reset_at = CASE WHEN rate_limits.reset_at <= ? THEN ? ELSE rate_limits.reset_at END
+      RETURNING count, reset_at`).get(key, reset, nowIso, nowIso, reset);
+    return { allowed: row.count <= max, resetAt: row.reset_at };
   }
 
   close() { this.db.close(); }

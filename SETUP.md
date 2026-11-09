@@ -1,50 +1,59 @@
 # Iconic Car Washing Centre — setup & handover
 
-## Abhi kya bana hai
+## Ab kya storage use hoti hai?
 
-- Mobile-friendly website, Iconic yellow/charcoal branding, original shop photos and an explicitly labelled illustrative hero image.
-- Six bookable services using the rates you confirmed from the poster.
-- Date/time slots in **Asia/Kolkata (IST)**, 60-day booking window, configurable working hours, weekly offs, service durations and simultaneous-vehicle capacity.
-- SQLite-backed reservations shared by all visitors to the same server. Overlapping bookings are checked inside a database transaction; retries are idempotent.
-- Owner dashboard at `/admin`: date-wise list, confirm/complete/cancel, CSV and `.ics` calendar export, WhatsApp day-list sharing, shop settings.
-- Booking requests include reference, service, price, date, start/end time, name, mobile and vehicle in a ready-made WhatsApp message to **7970000601**.
+- **Vercel / public production:** Postgres (`DATABASE_URL`). Bookings, owner sessions aur rate limits database mein save hote hain.
+- **Local preview without DATABASE_URL:** SQLite fallback, sirf local demo/development ke liye. Vercel par SQLite fallback use nahi hota.
+- Overlapping slot protection transaction + Postgres advisory lock se hoti hai, taaki alag serverless instances ek hi slot double-book na karein.
 
-**Abhi live bookings band hain.** Aapne rates aur number confirm kiya, lekin actual opening/closing time aur durations nahi diye. Website ka 09:00–19:00 schedule aur service durations **sirf demo examples** hain. Public demo bookings cannot reserve real slots or send messages to the shop. Personal fields in demo requests are discarded by the server.
+**Abhi bhi live bookings band hain.** Rates aur WhatsApp number confirmed hain; actual opening/closing time aur service durations abhi chahiye. 09:00–19:00 schedule aur durations **sirf demo examples** hain.
 
-## 1. Local / preview chalana
+## Vercel par live karna (recommended path)
 
-Node.js **22.13+** chahiye (Node 22.22 par tested; built-in SQLite experimental warning normal hai).
+Short checklist: [`docs/VERCEL-DEPLOY.md`](docs/VERCEL-DEPLOY.md).
+
+1. Ek Postgres database banao — Neon/Supabase/jaisa provider. **Pooled connection string** copy karo. Connection string ko chat, Git ya frontend mein share mat karo.
+2. Vercel mein GitHub repo import karo. `vercel.json` already set hai:
+   - Framework: Vite
+   - Install: `npm ci`
+   - Build: `npm run build`
+   - Output: `dist`
+   - API: `api/[...path].mjs`
+   - `/admin` rewrite: `index.html`
+3. Vercel **Environment Variables** mein set karo:
+   - `DATABASE_URL` = pooled Postgres connection string
+   - `ADMIN_PASSWORD` = unique password, **12+ characters**
+   - `SHOP_WHATSAPP` = `917970000601`
+4. Project Settings mein Node.js **22.x** select karo.
+5. Deploy karo. Deploy ke baad `/admin` kholo, login karo, **Shop settings** mein actual hours/durations/weekly off/capacity bharein.
+6. **Accept live bookings** check karke save karo. Ek test booking banao, WhatsApp message ka number/date/time check karo, **Send** dabao, phir test request dashboard se cancel karo.
+
+Production ke liye `DATABASE_URL` aur `ADMIN_PASSWORD` zaroori hain. Preview deployments ke liye alag test database better hai; same production database preview par use karne se settings/data mix ho sakte hain.
+
+## Local chalana
+
+Node.js **22.13+** chahiye (Node 22.22 par tested).
 
 ```sh
 npm ci
+cp .env.example .env   # values fill karein; DATABASE_URL local mein optional hai
 npm run dev
 ```
 
-Server `0.0.0.0:3000` par chalta hai. Vite frontend usi server se serve hota hai; browser API calls relative URLs use karti hain. Reverse-proxy preview hosts allowed hain. Port badalna ho to `.env` mein `PORT` set karein.
+Server `0.0.0.0:3000` par chalta hai. `DATABASE_URL` set ho to local server bhi Postgres use karega; warna local SQLite demo store. Browser API calls relative URLs use karti hain.
 
-## 2. Owner password aur live schedule
+## Owner password aur live schedule
 
-1. `.env.example` ko `.env` mein copy karein.
-2. `ADMIN_PASSWORD` mein apna unique password rakhein, **kam se kam 12 characters**. Koi default password nahi hai. Password chat, Git ya frontend code mein na daalein.
-3. Server restart karein, `/admin` kholen aur sign in karein.
-4. **Shop settings** mein actual opening/closing time, weekly offs, slot interval, capacity aur har service ke minutes bharein.
-5. **Accept live bookings** check karein, phir **Save shop settings** dabayein.
-6. Website par ek test booking banayein. WhatsApp mein message khulna aur **Send** dabana zaroor check karein. Test request ko dashboard se cancel karein taaki slot free ho jaye.
+1. `/admin` kholen aur sign in karein.
+2. **Shop settings** mein actual opening/closing time, weekly offs, slot interval, capacity aur har service ke minutes bharein.
+3. **Accept live bookings** check karein, phir **Save shop settings** dabayein.
+4. Website par test booking banayein. WhatsApp mein message khulna aur **Send** dabana zaroor check karein. Test request cancel karein taaki slot free ho jaye.
 
-Live mode on hote hi demo API/dashboard band ho jata hai. Existing real bookings apne original time/price snapshots rakhti hain. Pause karne ke liye live checkbox off karke save karein; existing records delete nahi hote.
+Live mode on hote hi public demo API/dashboard band ho jata hai. Existing real bookings apne original time/price snapshots rakhti hain. Pause karne ke liye live checkbox off karke save karein; existing records delete nahi hote.
 
-`.env` settings:
+Sessions database mein save hote hain, 8 hours mein expire hote hain, aur logout par revoke hote hain. Password rotate karne par purane sessions invalidate karne ke liye `admin_sessions` table clear karein.
 
-```dotenv
-PORT=3000
-ADMIN_PASSWORD=replace-with-your-own-private-password
-DATA_DIR=./data
-SHOP_WHATSAPP=917970000601
-```
-
-`SHOP_WHATSAPP` international format mein hai, bina `+`, spaces ya dashes. Isi number par booking messages aur day lists khulti hain. Owner login ke liye strong unique password use karein; sessions 8 hours mein expire hote hain aur server restart par logout ho jata hai.
-
-## 3. WhatsApp ka actual flow
+## WhatsApp ka actual flow
 
 Aapne **simple WhatsApp Send** option choose kiya hai:
 
@@ -57,36 +66,27 @@ Aapne **simple WhatsApp Send** option choose kiya hai:
 
 **Important:** Yeh automatic WhatsApp notification/API nahi hai. Website chupke se message send nahi kar sakti. Customer ka Send aur owner ka confirmation zaroori hai. Day-list button bhi WhatsApp mein ready text kholta hai; send aapko karna hai. Automatic server-to-WhatsApp messages chahiye hon to approved WhatsApp Business Platform setup, templates aur secure server-side credentials ki alag setup zaroorat hogi. Tokens kabhi frontend mein na rakhein.
 
-## 4. Hosting / public launch
+## Google Business Profile
 
-- `npm run build`, phir `npm start` (production mode). Pehle `.env` configure karein.
-- HTTPS wala **single always-on Node host** use karein jo Node 22+, long-running processes aur persistent disk support karta ho. Static-only hosting par backend/SQLite nahi chalega.
-- `DATA_DIR` ko persistent disk par point karein. Ephemeral/serverless filesystem par bookings restart/deploy mein kho sakti hain.
-- One server instance is enough for a neighbourhood centre. Multiple instances ke liye shared transactional database (e.g. Postgres) mein migration karein; separate SQLite files se double booking ho sakti hai.
-- Reverse proxy ko HTTPS forward karna chahiye; app first proxy hop trust karti hai. Direct public exposure mein proxy config apne host ke hisaab se restrict karein.
-- Database ka regular backup rakhein. `data/` Git mein commit nahi hota. Backup lete waqt SQLite-consistent backup method use karein, sirf live main DB file copy karna avoid karein.
-- Public launch se pehle real schedule, test booking, cancellation, owner login, WhatsApp Send, mobile layout aur backup/restore check karein.
+Aapne **Google Business Profile** choose kiya tha, Maps widget nahi. Exact shop address abhi nahi mila, isliye fake address/map pin nahi lagaya gaya.
 
-## 5. Google Business Profile
+Detailed checklist: [`docs/GOOGLE-BUSINESS.md`](docs/GOOGLE-BUSINESS.md). Vercel live URL milne ke baad use website/booking link ke roop mein add karein. Listing aapke Google account mein banegi aur verification aapko complete karni hogi.
 
-Aapne **Google Business Profile** choose kiya, Maps widget nahi. Exact shop address abhi nahi mila, isliye fake address/map pin nahi lagaya gaya.
-
-Detailed checklist: [`docs/GOOGLE-BUSINESS.md`](docs/GOOGLE-BUSINESS.md). Listing aapke Google account mein banegi aur Google ki verification aapko complete karni hogi; yeh app listing automatically create/verify nahi karti.
-
-## 6. Tests
+## Tests
 
 ```sh
-npm test          # domain + HTTP/API tests
+npm test          # domain + HTTP/API + embedded Postgres tests
 npm run build     # TypeScript + production bundle
 npm run test:ui   # browser smoke/live flow; build first, port 3100 temporarily used
 ```
 
-Browser tests Chromium ka npm-packaged binary use karte hain. Linux par required system libraries hone chahiye; sandbox mein bundled compatible libraries use ki gayi hain.
+Postgres tests embedded Postgres (PGlite) par chalte hain; production mein actual Postgres provider use hota hai. Browser tests Chromium ka npm-packaged binary use karte hain.
 
-## 7. Privacy / operational notes
+## Privacy / operational notes
 
 - Real customer details only owner APIs se accessible hain. Demo list public hai, lekin usmein personal details store nahi hoti.
 - Owner cancelled record ka **Delete details** use karke personal data hata sakte hain. Active booking pehle cancel karni hogi; cancellation slot free karti hai, isliye customer ko inform karein.
 - CSV/Calendar exports mein customer details hoti hain; files responsibly share karein.
+- Database backups provider dashboard se enable/rakhein. Restore test karein.
 - No online payments, no fake reviews, no invented address, no unconfirmed bike/engine/foam/interior prices.
 - Original notice ki breakage/damage disclaimer website par visible hai. Vehicle condition service se pehle discuss karein.

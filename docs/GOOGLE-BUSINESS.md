@@ -12,7 +12,7 @@ Aapne Google Business Profile banana choose kiya hai. Yeh website se alag Google
 - **Do not upload the generated hero as a real shop photo.** It is illustrative, not a photograph of the actual premises.
 - **Hours:** Abhi confirm nahi. Actual opening/closing time aur weekly off enter karein.
 - **Address / service area:** Abhi confirm nahi. Customers ko sirf actual visitable shop address dena chahiye.
-- **Website:** Public hosting ke baad actual HTTPS website URL add karein; sandbox preview URL permanent listing ke liye use na karein.
+- **Website:** Vercel/public hosting ke baad actual HTTPS website URL add karein; sandbox preview URL permanent listing ke liye use na karein.
 - **Booking link:** Hosted website ka `/#book` URL, after live hours/durations are configured and tested.
 
 ## Setup steps

@@ -103,6 +103,28 @@ export function validateBooking(raw, now = new Date(), { demo = false } = {}) {
   return { name, phone: `+91${phone}`, vehicle, note, date: raw.date, time: raw.time, serviceId: service.id, requestId: raw.requestId.toLowerCase(), consent: true };
 }
 
+export function buildAvailability(settings, date, serviceId, rows, now = new Date()) {
+  const service = SERVICES.find((s) => s.id === serviceId);
+  if (!service) throw new HttpError(400, 'Choose a service from the menu.');
+  if (!validDate(date) || date < shopDate(now) || date > dateOffset(shopDate(now), WINDOW_DAYS)) throw new HttpError(400, 'Choose a date within the next 60 days.');
+  const duration = settings.durations[serviceId];
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  const base = { date, serviceId, minutes: duration, opening: settings.opening, closing: settings.closing, capacity: settings.capacity, slots: [], closedReason: '' };
+  if (settings.weeklyOff.includes(day)) return { ...base, closedReason: 'The centre is closed on this day. Please choose another date.' };
+  const earliest = now.getTime() + settings.leadMinutes * 60_000;
+  for (let start = minutes(settings.opening); start + duration <= minutes(settings.closing); start += settings.slotMinutes) {
+    const end = start + duration;
+    const startAt = instant(date, timeString(start)).getTime();
+    const endAt = instant(date, timeString(end)).getTime();
+    const used = rows.filter((r) => Date.parse(r.start_at) < endAt && Date.parse(r.end_at) > startAt).length;
+    const remaining = Math.max(0, settings.capacity - used);
+    const past = startAt < earliest;
+    base.slots.push({ time: timeString(start), endTime: timeString(end), remaining, available: !past && remaining > 0, reason: past ? 'past' : remaining === 0 ? 'full' : '' });
+  }
+  if (!base.slots.length) base.closedReason = 'This service is longer than the working day. Please ask the centre about a suitable time.';
+  return base;
+}
+
 export function bookingMessage(booking, business = CATALOG.business) {
   return [
     `${business.fullName.toUpperCase()} — BOOKING REQUEST`,
